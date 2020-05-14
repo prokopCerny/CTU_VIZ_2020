@@ -3,61 +3,115 @@ from pathlib import Path
 import json
 import numpy as np
 
-def testClosure(stringVariable: tk.StringVar, labelText:str):
-    def testClickListener(event):
+
+# Stolen from stackoverflow TODO: rewrite shorter
+def RGBtoHex(vals, rgbtype=1):
+    """Converts RGB values in a variety of formats to Hex values.
+
+       @param  vals     An RGB/RGBA tuple
+       @param  rgbtype  Valid values are:
+                            1 - Inputs are in the range 0 to 1
+                          256 - Inputs are in the range 0 to 255
+
+       @return A hex string in the form '#RRGGBB' or '#RRGGBBAA'
+  """
+
+    if len(vals)!=3 and len(vals)!=4:
+        raise Exception("RGB or RGBA inputs to RGBtoHex must have three or four elements!")
+    if rgbtype!=1 and rgbtype!=256:
+        raise Exception("rgbtype must be 1 or 256!")
+
+    #Convert from 0-1 RGB/RGBA to 0-255 RGB/RGBA
+    if rgbtype==1:
+        vals = [255*x for x in vals]
+
+    #Ensure values are rounded integers, convert to hex, and concatenate
+    return '#' + ''.join([f'{int(round(x)):02X}' for x in vals])
+
+
+def setStringVarEventHandlerClosure(stringVariable: tk.StringVar, text:str):
+    def setStringVarEventHandler(event):
         print(f'Clicked at {event.x}, {event.y}')
-        stringVariable.set(labelText)
-        print(event.widget.gettags(event.widget.find_withtag('current')))
-    return testClickListener
+        stringVariable.set(text)
+        #print(event.widget.itemconfig(event.widget.find_withtag('current'), fill='green'))
+    return setStringVarEventHandler
 
 
-class LabelCanvas(tk.Frame):
-    def __init__(self, master, label, stringVariable):
+class NeuronActivationCircles(tk.Frame):
+    def __init__(self, master, label, stringVariable, digit, data, max):
         super().__init__(master=master, height=30)
         self.label = tk.Label(self, text=label, anchor='w', width=6)
-        self.canvas = tk.Canvas(self, bg='blue', height=30)
-        self.canvas.create_oval(0, 0, 20, 20, fill='red', tag='c1')
-        self.canvas.tag_bind('c1', '<ButtonPress-1>', testClosure(stringVariable, f'{label} - circle1'))
-        self.canvas.create_oval(20, 0, 40, 20, fill='red', tag='c2')
-        self.canvas.tag_bind('c2', '<ButtonPress-1>', testClosure(stringVariable, f'{label} - circle2'))
+        self.canvas = tk.Canvas(self, height=30)
+        self.digit = digit
+        self.cur_digit_neuron_activations = data[digit]
+        self.max = max
+        self.circles = [self.canvas.create_oval(6+num*23, 6, 6+20+num*23, 6+20, fill=RGBtoHex((v/max, v/max, v/max))) for (num, v) in enumerate(data[digit])]
+        for num, circle in enumerate(self.circles):
+            self.canvas.tag_bind(circle, '<ButtonPress-1>', setStringVarEventHandlerClosure(stringVariable, f'Digit {digit} - Neuron {num + 1}: {data[digit, num]}'))
         self.label.pack(side=tk.LEFT, fill=tk.X, expand=False)
-        self.canvas.pack(side=tk.RIGHT, fill=tk.X, expand=True)
+        self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
+
+    def update_max(self, max):
+        """Update brightness relative to maximum observed value"""
+        if self.max != max:
+            self.max = max
+            for cur_activation, circle in zip(self.cur_digit_neuron_activations, self.circles):
+                v = cur_activation/max
+                self.canvas.itemconfig(circle, fill=RGBtoHex((v, v, v)))
+
 
 class App:
-    def __init__(self, master):
+    # TODO: CLEANUP CODE AND IMPROVE NAMING
+    def __init__(self, master, data):
         self.master = master
+        self.data = data
         self.frame = tk.Frame(self.master)
-        self.addButton = tk.Button(self.frame, text="New thingy", width=25, command=self.new_thing)
-        self.removeButton = tk.Button(self.frame, text="Delete last thingy", width=25, command=self.delete_thing)
+        self.addButton = tk.Button(self.frame, text="Add digit activations", width=25,
+                                   command=self.next_digit_activations)
+        self.removeButton = tk.Button(self.frame, text="Delete last digit activations", width=25,
+                                      command=self.delete_last_digit_activations)
         self.topText = tk.StringVar()
         self.topTextLabel = tk.Label(self.frame, textvariable=self.topText)
-        self.topText.set("Hello!")
-        self.thingies = []
+        self.topText.set("Click on a neuron!")
+        self.digit_activations = []
         self.topTextLabel.pack()
         self.addButton.pack()
         self.removeButton.pack()
         self.frame.pack(fill=tk.BOTH)
+        self.maxes = []  # list of max neuron activation per each digit, used for value normalization for coloring
 
-    def new_thing(self):
-        if len(self.thingies) < 10:
-            new_thing = LabelCanvas(self.frame, f'{len(self.thingies)}', self.topText)
-            self.thingies.append(new_thing)
+    def next_digit_activations(self):
+        if len(self.digit_activations) < 10:
+            digit = len(self.digit_activations)
+            self.maxes.append(np.max(self.data[digit]))
+            cur_max = np.max(self.maxes)
+            new_thing = NeuronActivationCircles(self.frame, f'Digit {digit}', self.topText, digit, self.data, cur_max)
+            self.digit_activations.append(new_thing)
             new_thing.pack(fill=tk.X)
+            for thing in self.digit_activations:
+                thing.update_max(cur_max)
 
-    def delete_thing(self):
-        if self.thingies:
-            last_thing = self.thingies.pop()
+    def delete_last_digit_activations(self):
+        if self.digit_activations:
+            last_thing = self.digit_activations.pop()
             last_thing.destroy()
+            self.maxes.pop()
+            if self.maxes:
+                cur_max = np.max(self.maxes)
+                for thing in self.digit_activations:
+                    thing.update_max(cur_max)
 
 
 if __name__ == '__main__':
-    # with Path('./test.json').open(mode='r') as file:
-    #     activations = np.array(json.loads(file.read()))
-    # print(activations)
+    # a json is needed containing the average activations for all digits in the first fully connected layer
+    # can be created using the jupyter notebook
+    with Path('./test.json').open(mode='r') as file:
+        activations = np.array(json.loads(file.read()))
+    print(activations)
 
     window = tk.Tk()
-    window.geometry("500x350+300+300")
-    app = App(window)
+    window.geometry("1550x450+300+300")
+    app = App(window, activations)
 
     # canvas = tk.Canvas(window)
     # canvas.create_line(15, 25, 200, 25)
