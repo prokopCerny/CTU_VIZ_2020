@@ -2,7 +2,10 @@ import tkinter as tk
 from pathlib import Path
 import json
 import numpy as np
+from colormaps import viridis, plasma, inferno, magma
 
+
+colormap = viridis  # TODO: make the colormap selection not be a global variable
 
 # Stolen from stackoverflow TODO: rewrite shorter
 def RGBtoHex(vals, rgbtype=1):
@@ -45,7 +48,7 @@ class NeuronActivationCircles(tk.Frame):
         self.digit = digit
         self.cur_digit_neuron_activations = data[digit]
         self.max = max
-        self.circles = [self.canvas.create_oval(6+num*23, 6, 6+20+num*23, 6+20, fill=RGBtoHex((v/max, v/max, v/max))) for (num, v) in enumerate(data[digit])]
+        self.circles = [self.canvas.create_oval(6+num*23, 6, 6+20+num*23, 6+20, fill=RGBtoHex(colormap(v/max))) for (num, v) in enumerate(data[digit])]
         for num, circle in enumerate(self.circles):
             self.canvas.tag_bind(circle, '<ButtonPress-1>', setStringVarEventHandlerClosure(stringVariable, f'Digit {digit} - Neuron {num + 1}: {data[digit, num]}'))
         self.label.pack(side=tk.LEFT, fill=tk.X, expand=False)
@@ -57,7 +60,7 @@ class NeuronActivationCircles(tk.Frame):
             self.max = max
             for cur_activation, circle in zip(self.cur_digit_neuron_activations, self.circles):
                 v = cur_activation/max
-                self.canvas.itemconfig(circle, fill=RGBtoHex((v, v, v)))
+                self.canvas.itemconfig(circle, fill=RGBtoHex(colormap(v)))
 
 
 class App:
