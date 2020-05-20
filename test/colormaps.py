@@ -1033,6 +1033,7 @@ _viridis_data = [[0.267004, 0.004874, 0.329415],
 
 def interpolate_rgb_closure(a, b):
     delta = b - a
+
     def interpolate(t):
         return tuple(a + t * delta)
     return interpolate
@@ -1040,8 +1041,8 @@ def interpolate_rgb_closure(a, b):
 
 def interpolate_matrix(matrix):
     N = matrix.shape[0] - 1
-    intervalWidth = 1/N
     intervals = [interpolate_rgb_closure(matrix[i], matrix[i+1]) for i in range(N)]
+
     def interpolate_0_1(t):
         fractionalLocation = t * N
         idx = max(0, ceil(fractionalLocation - 1))
