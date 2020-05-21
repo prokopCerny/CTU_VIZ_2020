@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk
+from PIL import Image, ImageTk
+
 from pathlib import Path
 import json
 import numpy as np
@@ -26,6 +28,8 @@ def RGBtoHex(vals, rgbtype=1):
 
     #Convert from 0-1 RGB/RGBA to 0-255 RGB/RGBA
     if rgbtype == 1:
+        if not all(0 <= x <= 1 for x in vals):
+            raise Exception("RGB1 values are not in range 0-1")
         vals = [255 * x for x in vals]
 
     #Ensure values are rounded integers, convert to hex, and concatenate
@@ -74,14 +78,15 @@ def setStringVarEventHandlerClosure(stringVariable: tk.StringVar, text:str):
 
 
 class NeuronActivationCircles(tk.Frame):
-    def __init__(self, master, label, stringVariable, neuron_activations, max_act, colormap=viridis):
+    def __init__(self, master, label, stringVariable, neuron_activations, min_act, max_act, colormap=viridis):
         super().__init__(master=master, height=30)
         self.cmap = colormap
         self.label = tk.Label(self, text=label, anchor='w', width=6)
         self.canvas = tk.Canvas(self, height=30)
         self.cur_instance_neuron_activations = neuron_activations
+        self.min = min_act
         self.max = max_act
-        self.circles = [self.canvas.create_oval(6+num*23, 6, 6+20+num*23, 6+20, fill=RGBtoHex(self.cmap(v/self.max)))
+        self.circles = [self.canvas.create_oval(6+num*23, 6, 6+20+num*23, 6+20, fill=RGBtoHex(self.cmap((v-self.min)/(self.max-self.min))))
                         for (num, v)
                         in enumerate(self.cur_instance_neuron_activations)]
         for num, (circle, activation) in enumerate(zip(self.circles, self.cur_instance_neuron_activations)):
@@ -92,12 +97,12 @@ class NeuronActivationCircles(tk.Frame):
         self.label.pack(side=tk.LEFT, fill=tk.X, expand=False)
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
-    def update_max(self, max):
+    def update_max_min(self, max, min):
         """Update brightness relative to maximum observed value"""
-        if self.max != max:
-            self.max = max
+        if self.max != max or self.min != min:
+            self.max, self.min = max, min
             for cur_activation, circle in zip(self.cur_instance_neuron_activations, self.circles):
-                v = cur_activation/max
+                v = (cur_activation-self.min)/(self.max-self.min)
                 self.canvas.itemconfig(circle, fill=RGBtoHex(self.cmap(v)))
 
 
@@ -153,6 +158,7 @@ class LayerActivationWindow(tk.Toplevel):
 
         self.neuron_activations = {}
         self.maxes = {}  # list of max neuron activation per each digit, used for value normalization for coloring
+        self.mins = {}
 
         self.recreate_from_model()
         self.model.observers.append(self)
@@ -165,12 +171,14 @@ class LayerActivationWindow(tk.Toplevel):
     def _add_instance(self, instance):
         if instance not in self.neuron_activations:
             self.maxes[instance] = np.max(self.selected_data[instance])
+            self.mins[instance] = np.min(self.selected_data[instance])
             cur_max = max(self.maxes.values())
-            new_thing = NeuronActivationCircles(self.frame, instance, self.topText, self.selected_data[instance], cur_max)
+            cur_min = min(self.mins.values())
+            new_thing = NeuronActivationCircles(self.frame, instance, self.topText, self.selected_data[instance],cur_min, cur_max)
             self.neuron_activations[instance] = new_thing
             new_thing.pack(fill=tk.X, expand=True)
             for thing in self.neuron_activations.values():
-                thing.update_max(cur_max)
+                thing.update_max_min(cur_max, cur_min)
 
     def _remove_instance(self, instance):
         if instance in self.neuron_activations:
@@ -178,10 +186,12 @@ class LayerActivationWindow(tk.Toplevel):
             del self.neuron_activations[instance]
         if instance in self.maxes:
             del self.maxes[instance]
+            del self.mins[instance]
             if self.maxes:
                 cur_max = max(self.maxes.values())
+                cur_min = min(self.mins.values())
                 for thing in self.neuron_activations.values():
-                    thing.update_max(cur_max)
+                    thing.update_max_min(cur_max, cur_min)
 
     def notify(self, event):
         if isinstance(event, ModelEvent):
@@ -198,8 +208,33 @@ class LayerActivationWindow(tk.Toplevel):
             self._add_instance(digit)
 
 
+class ImageWindow(tk.Frame):
+    def __init__(self, master, model, instance):
+        super().__init__(master=master)
+        self.model = model
+        self.canvas = None
+        self.update_canvas(instance)
+
+    def update_canvas(self, instance):
+        if self.canvas is not None:
+            self.canvas.destroy()
+        image_data = self.model.data['images'][instance]
+        imag = Image.fromarray(np.round(image_data*255)).resize(size=(28*10, 28*10), resample=Image.NEAREST)
+        img = ImageTk.PhotoImage(image=imag)
+        self.canvas = tk.Canvas(self,width=300,height=300) #tk.Canvas(master, width=300, height=300)
+        self.canvas.pack()
+        self.canvas.pic=img
+        self.canvas.create_image(0,0, anchor="nw", image=img)
+
+
+
+
+
 class MainWindow:
     def __init__(self, master, model: DataModel):
+        self.image_window = ImageWindow(tk.Toplevel(master), model, next(iter(model.data['images'])))
+        self.image_window.pack()
+
         self.master = master
         self.model = model
 
@@ -217,7 +252,7 @@ class MainWindow:
         self.layer_buttons = [tk.Button(self.master,
                                         text=f'{layer} activations',
                                         width=25,
-                                        command=self.aaa_closure(layer))
+                                        command=self.open_activation_window_closure(layer))
                               for layer
                               in self.model.data['activations'].keys()]
 
@@ -225,17 +260,11 @@ class MainWindow:
         self.entry.pack()
         self.addButton.pack()
         self.removeButton.pack()
-        self.sep.pack(fill=tk.X, expand=True, pady=5)
+        self.sep.pack(fill=tk.X, pady=5)
         for button in self.layer_buttons:
             button.pack()
 
-        # self.fc1_button = tk.Button(self.master, text="FC1 activations", width=25, command=lambda: self.activation_window_open('fc1'))
-        # self.fc2_button = tk.Button(self.master, text="FC2 activations", width=25, command=lambda: self.activation_window_open('fc2'))
-        #
-        # self.fc1_button.pack()
-        # self.fc2_button.pack()
-
-    def aaa_closure(self, layer:str):
+    def open_activation_window_closure(self, layer:str):
         return lambda: self.activation_window_open(layer)
 
     def read_add_digit(self):
@@ -244,6 +273,8 @@ class MainWindow:
             digit = int(txt)
             if 0 <= digit < 10:
                 self.model.select(f'Digit {digit}')
+                self.image_window.update_canvas(f'Digit {digit}')
+                # self.update_canvas(f'Digit {digit}')
                 self.entry.delete(0, tk.END)
                 self.entry.insert(0, f'{digit+1}')
 
@@ -274,18 +305,18 @@ if __name__ == '__main__':
         network_data = json.loads(file.read())
     # print(activations)
 
+    for key in network_data['images'].keys():
+        network_data['images'][key] = np.array(network_data['images'][key])
+
     model = DataModel(network_data)
 
     # *model.selected, = (f'Digit {x}' for x in range(10))
 
-    window = tk.Tk()
-    print(window.tk)
+    root = tk.Tk()
+    image_data = network_data['images'][next(iter(network_data['images']))]
+    # print(root.tk)
     # window.geometry("1550x450+300+300")
-    # fr = tk.Frame(window)
-    # btn = tk.Button(fr,text="open", width=25, command=lambda: LayerActivationWindow(master=window, model=model, layer_identifier='fc1'))
-    # btn.pack()
-    # fr.pack()
-    #app = LayerActivationWindow(window, model, 'fc1')
-    app = MainWindow(window, model)
 
-    window.mainloop()
+    app = MainWindow(root, model)
+
+    root.mainloop()
