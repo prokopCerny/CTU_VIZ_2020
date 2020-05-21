@@ -1,4 +1,5 @@
 import tkinter as tk
+from tkinter import ttk
 from pathlib import Path
 import json
 import numpy as np
@@ -113,39 +114,61 @@ def find_smallest_missing(lst):
         return 0
 
 
-class App:
+def compute_needed_width_for_neurons(layer_data):
+    first_instance_key = next(iter(layer_data))
+    neuron_count = len(layer_data[first_instance_key])
+    return 6+5+67+neuron_count*23
+
+
+class LayerActivationWindow(tk.Toplevel):
     # TODO: CLEANUP CODE AND IMPROVE NAMING
-    def __init__(self, master, model: DataModel):
-        self.master = master
+    def __init__(self, master, model: DataModel, layer_identifier: str):
+        tk.Toplevel.__init__(self, master=master)
         self.model = model
-        self.frame = tk.Frame(self.master)
-        self.entry = tk.Entry(self.frame)
-        self.addButton = tk.Button(self.frame, text="Add digit activations", width=25,
-                                   command=self.read_add_digit)
-        self.removeButton = tk.Button(self.frame, text="Delete max digit activations", width=25,
-                                      command=self.delete_max_digit_activations)
-        self.recBtn = tk.Button(self.frame, text="Recreate", width=25, command=self.recreate_from_model)
+        self.layer = layer_identifier
+        self.selected_data = self.model.data['activations'][self.layer]
+
         self.topText = tk.StringVar()
-        self.topTextLabel = tk.Label(self.frame, textvariable=self.topText)
+        self.frame_for_top_label_alignment = tk.Frame(self)
+        self.topTextLabel = tk.Label(self.frame_for_top_label_alignment, anchor='w', textvariable=self.topText)
         self.topText.set("Click on a neuron!")
+
+        self.frame_for_top_label_alignment.pack(side=tk.TOP, fill=tk.X, expand=False)
+        self.topTextLabel.pack(side=tk.LEFT)
+
+        self.canvas = tk.Canvas(self)
+        self.v_scrollbar = tk.Scrollbar(self, command=self.canvas.yview)
+        self.h_scrollbar = tk.Scrollbar(self, command=self.canvas.xview, orient='horizontal')
+        self.v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.canvas.configure(yscrollcommand=self.v_scrollbar.set, xscrollcommand=self.h_scrollbar.set)
+
+        self.frame = tk.Frame(self.canvas)
+        self.canvas_frame = self.canvas.create_window((0, 0), window=self.frame, anchor='nw')
+        self.canvas.itemconfig(self.canvas_frame, width=compute_needed_width_for_neurons(self.selected_data))
+
+        self.frame.bind('<Configure>', lambda event: self.canvas.configure(scrollregion=self.canvas.bbox('all')))
+        # self.canvas.bind('<Configure>', lambda event: self.canvas.itemconfig(self.canvas_frame, width=event.width))
+
         self.neuron_activations = {}
-        self.topTextLabel.pack()
-        self.entry.pack()
-        self.addButton.pack()
-        self.removeButton.pack()
-        self.recBtn.pack()
-        self.frame.pack(fill=tk.BOTH)
         self.maxes = {}  # list of max neuron activation per each digit, used for value normalization for coloring
+
         self.recreate_from_model()
         self.model.observers.append(self)
+        self.protocol("WM_DELETE_WINDOW", self._quit_window)
+
+    def _quit_window(self):
+        self.model.observers.remove(self)
+        self.destroy()
 
     def _add_instance(self, instance):
         if instance not in self.neuron_activations:
-            self.maxes[instance] = np.max(self.model.data[instance])
+            self.maxes[instance] = np.max(self.selected_data[instance])
             cur_max = max(self.maxes.values())
-            new_thing = NeuronActivationCircles(self.frame, f'Digit {instance}', self.topText, self.model.data[instance], cur_max)
+            new_thing = NeuronActivationCircles(self.frame, instance, self.topText, self.selected_data[instance], cur_max)
             self.neuron_activations[instance] = new_thing
-            new_thing.pack(fill=tk.X)
+            new_thing.pack(fill=tk.X, expand=True)
             for thing in self.neuron_activations.values():
                 thing.update_max(cur_max)
 
@@ -167,20 +190,6 @@ class App:
             elif event.type == ModelEventType.REMOVE:
                 self._remove_instance(event.data)
 
-    def read_add_digit(self):
-        txt = self.entry.get()
-        if txt and txt.isdigit():
-            digit = int(txt)
-            if 0 <= digit < 10:
-                self.model.select(digit)
-                self.entry.delete(0, tk.END)
-                self.entry.insert(0, f'{digit+1}')
-
-    def delete_max_digit_activations(self):
-        if self.neuron_activations:
-            max_digit = max(self.neuron_activations.keys())
-            self.model.remove(max_digit)
-
     def recreate_from_model(self):
         while self.neuron_activations:
             instance = next(iter(self.neuron_activations))
@@ -189,23 +198,94 @@ class App:
             self._add_instance(digit)
 
 
+class MainWindow:
+    def __init__(self, master, model: DataModel):
+        self.master = master
+        self.model = model
+
+        self.label = tk.Label(self.master, text="Digit:", anchor='w')
+        self.entry = tk.Entry(self.master)
+        self.entry.insert(tk.END, "0")
+        self.addButton = tk.Button(self.master, text="Add digit activations", width=25,
+                                   command=self.read_add_digit)
+        self.removeButton = tk.Button(self.master, text="Delete max digit activations", width=25,
+                                      command=self.delete_max_digit_activations)
+
+        self.sep = ttk.Separator(self.master, orient=tk.HORIZONTAL)
+
+        self.activation_windows = {}
+        self.layer_buttons = [tk.Button(self.master,
+                                        text=f'{layer} activations',
+                                        width=25,
+                                        command=self.aaa_closure(layer))
+                              for layer
+                              in self.model.data['activations'].keys()]
+
+        self.label.pack()
+        self.entry.pack()
+        self.addButton.pack()
+        self.removeButton.pack()
+        self.sep.pack(fill=tk.X, expand=True, pady=5)
+        for button in self.layer_buttons:
+            button.pack()
+
+        # self.fc1_button = tk.Button(self.master, text="FC1 activations", width=25, command=lambda: self.activation_window_open('fc1'))
+        # self.fc2_button = tk.Button(self.master, text="FC2 activations", width=25, command=lambda: self.activation_window_open('fc2'))
+        #
+        # self.fc1_button.pack()
+        # self.fc2_button.pack()
+
+    def aaa_closure(self, layer:str):
+        return lambda: self.activation_window_open(layer)
+
+    def read_add_digit(self):
+        txt = self.entry.get()
+        if txt and txt.isdigit():
+            digit = int(txt)
+            if 0 <= digit < 10:
+                self.model.select(f'Digit {digit}')
+                self.entry.delete(0, tk.END)
+                self.entry.insert(0, f'{digit+1}')
+
+    def delete_max_digit_activations(self):
+        if self.model.selected:
+            max_digit = max(self.model.selected)
+            self.model.remove(max_digit)
+
+    def activation_window_open(self, identifier: str):
+        try:
+            if self.activation_windows[identifier].state() == "normal":
+                self.activation_windows[identifier].focus()
+        except (KeyError, tk.TclError):
+            new_window = LayerActivationWindow(self.master, self.model, identifier)
+            instances = self.model.data['activations'][identifier]
+
+            new_window.geometry(f'{min(compute_needed_width_for_neurons(instances), 1250)}x450+300+300')
+            new_window.title(f'{identifier} activations')
+            self.activation_windows[identifier] = new_window
+
+
 if __name__ == '__main__':
     # TODO: split into more files, rename from gui_test
 
     # a json is needed containing the average activations for all digits in the first fully connected layer
     # can be created using the jupyter notebook
-    with Path('./test.json').open(mode='r') as file:
-        activations = np.array(json.loads(file.read()))
+    with Path('./NN_data.json').open(mode='r') as file:
+        network_data = json.loads(file.read())
     # print(activations)
 
-    # TODO: think up the correct JSON structure for storing the data, something like the dict below
-    data = {digit: activations[digit] for digit in range(10)}
-    model = DataModel(data)
-    print(model.data[0])
-    model.selected = [0, 4, 6]
+    model = DataModel(network_data)
+
+    # *model.selected, = (f'Digit {x}' for x in range(10))
 
     window = tk.Tk()
-    window.geometry("1550x450+300+300")
-    app = App(window, model)
+    print(window.tk)
+    # window.geometry("1550x450+300+300")
+    # fr = tk.Frame(window)
+    # btn = tk.Button(fr,text="open", width=25, command=lambda: LayerActivationWindow(master=window, model=model, layer_identifier='fc1'))
+    # btn.pack()
+    # fr.pack()
+    #app = LayerActivationWindow(window, model, 'fc1')
+    app = MainWindow(window, model)
 
     window.mainloop()
