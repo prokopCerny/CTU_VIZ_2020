@@ -87,5 +87,5 @@ class LayerActivationsWindow(tk.Toplevel):
         while self.neuron_activations:
             instance = next(iter(self.neuron_activations))
             self._remove_instance(instance)
-        for digit in self.model.selected:
+        for digit in self.model.selected_instances:
             self._add_instance(digit)

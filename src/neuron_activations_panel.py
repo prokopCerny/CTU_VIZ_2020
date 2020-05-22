@@ -8,9 +8,15 @@ class NeuronActivationsPanel(tk.Frame):
     def __init__(self, master, model, instance, stringVariable, neuron_activations, min_act, max_act, colormap=viridis):
         super().__init__(master=master, height=30)
         self.cmap = colormap
-        self.label = tk.Label(self, text=instance, anchor='w', width=8)
         self.model = model
         self.instance = instance
+
+        # TODO: decide if a button is better when the instance name is clickable
+        # TODO: fix the name after deciding
+        # self.label = tk.Label(self, text=instance, anchor='w', width=8)
+        self.label = tk.Button(self, text=instance, anchor='w', width=8)
+        self.label.bind('<Button-1>', lambda event: self.model.select(self.instance))
+
         self.remove_button = tk.Button(self, text='X', command=lambda : self.model.remove(self.instance))
         self.canvas = tk.Canvas(self, height=30)
         self.cur_instance_neuron_activations = neuron_activations
