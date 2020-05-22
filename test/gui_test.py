@@ -78,10 +78,13 @@ def setStringVarEventHandlerClosure(stringVariable: tk.StringVar, text:str):
 
 
 class NeuronActivationCircles(tk.Frame):
-    def __init__(self, master, label, stringVariable, neuron_activations, min_act, max_act, colormap=viridis):
+    def __init__(self, master, model, instance, stringVariable, neuron_activations, min_act, max_act, colormap=viridis):
         super().__init__(master=master, height=30)
         self.cmap = colormap
-        self.label = tk.Label(self, text=label, anchor='w', width=6)
+        self.label = tk.Label(self, text=instance, anchor='w', width=6)
+        self.model = model
+        self.instance = instance
+        self.remove_button = tk.Button(self, text='X', command=lambda : self.model.remove(self.instance))
         self.canvas = tk.Canvas(self, height=30)
         self.cur_instance_neuron_activations = neuron_activations
         self.min = min_act
@@ -93,7 +96,8 @@ class NeuronActivationCircles(tk.Frame):
             self.canvas.tag_bind(circle,
                                  '<ButtonPress-1>',
                                  setStringVarEventHandlerClosure(stringVariable,
-                                                                 f'{label} - Neuron {num + 1}: {activation}'))
+                                                                 f'{instance} - Neuron {num + 1}: {activation}'))
+        self.remove_button.pack(side=tk.LEFT, expand=False)
         self.label.pack(side=tk.LEFT, fill=tk.X, expand=False)
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)
 
@@ -174,7 +178,7 @@ class LayerActivationWindow(tk.Toplevel):
             self.mins[instance] = np.min(self.selected_data[instance])
             cur_max = max(self.maxes.values())
             cur_min = min(self.mins.values())
-            new_thing = NeuronActivationCircles(self.frame, instance, self.topText, self.selected_data[instance],cur_min, cur_max)
+            new_thing = NeuronActivationCircles(self.frame, self.model, instance, self.topText, self.selected_data[instance],cur_min, cur_max)
             self.neuron_activations[instance] = new_thing
             new_thing.pack(fill=tk.X, expand=True)
             for thing in self.neuron_activations.values():
@@ -209,8 +213,11 @@ class LayerActivationWindow(tk.Toplevel):
 
 
 class ImageWindow(tk.Frame):
-    def __init__(self, master, model, instance):
+    def __init__(self, master, model, instance, width=100, height=100, image_scale=1):
         super().__init__(master=master)
+        self.w = width
+        self.h = height
+        self.scale = image_scale
         self.model = model
         self.canvas = None
         self.update_canvas(instance)
@@ -219,20 +226,65 @@ class ImageWindow(tk.Frame):
         if self.canvas is not None:
             self.canvas.destroy()
         image_data = self.model.data['images'][instance]
-        imag = Image.fromarray(np.round(image_data*255)).resize(size=(28*10, 28*10), resample=Image.NEAREST)
+        im_h, im_w = image_data.shape
+        imag = Image.fromarray(np.round(image_data*255)).resize(size=(im_h*self.scale, im_w*self.scale), resample=Image.NEAREST)
         img = ImageTk.PhotoImage(image=imag)
-        self.canvas = tk.Canvas(self,width=300,height=300) #tk.Canvas(master, width=300, height=300)
+        self.canvas = tk.Canvas(self,width=self.w,height=self.h) #tk.Canvas(master, width=300, height=300)
         self.canvas.pack()
         self.canvas.pic=img
         self.canvas.create_image(0,0, anchor="nw", image=img)
 
 
+class ImageSelector(tk.Frame):
+    def __init__(self, master, model):
+        super().__init__(master=master)
+        self.model = model
+        self.top_frame = tk.Frame(self)
+        self.top_frame.pack(side=tk.TOP, fill=tk.X, expand=False)
+        self.digit_buttons = [tk.Button(self.top_frame,
+                                        text=f'{digit}',
+                                        command=self.button_callback_closure(digit))
+                              for digit in range(10)]
+        for button in self.digit_buttons:
+            button.pack(side=tk.LEFT)
+        self.lbl = tk.Label(self.top_frame, text="TSTS")
+        self.lbl.pack(side=tk.RIGHT)
+        self.bottom_frame = tk.Frame(self)
+        self.bottom_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+        self.scroll_canvas = self.h_scrollbar = None
+        self.show_numbers(0)
 
+    def button_callback_closure(self, digit:int):
+        return lambda: self.show_numbers(digit)
+
+    def show_numbers(self, digit: int):
+        if self.scroll_canvas is not None:
+            self.scroll_canvas.destroy()
+        if self.h_scrollbar is not None:
+            self.h_scrollbar.destroy()
+        self.scroll_canvas = tk.Canvas(self.bottom_frame)
+        self.h_scrollbar = tk.Scrollbar(self.bottom_frame, command=self.scroll_canvas.xview, orient='horizontal')
+        self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+        self.scroll_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.scroll_canvas.configure(xscrollcommand=self.h_scrollbar.set)
+        self.canvas_frame = tk.Frame(self.scroll_canvas)
+        self.canvas_window = self.scroll_canvas.create_window((0,0), window=self.canvas_frame, anchor='nw')
+        self.canvas_frame.bind('<Configure>',
+                               lambda event: self.scroll_canvas.configure(scrollregion=self.scroll_canvas.bbox('all')))
+
+        self.imags = [ImageWindow(self.canvas_frame, self.model, instance, width=84 ,height=84, image_scale=3)
+                      for idx, instance
+                      in enumerate(self.model.data['digit_to_instances'][str(digit)])
+                      if idx < 50]
+        for imag in self.imags:
+            imag.pack(side=tk.LEFT)
 
 
 class MainWindow:
     def __init__(self, master, model: DataModel):
-        self.image_window = ImageWindow(tk.Toplevel(master), model, next(iter(model.data['images'])))
+        self.selector_window = ImageSelector(tk.Toplevel(master), model)
+        self.selector_window.pack(fill=tk.BOTH, expand=True)
+        self.image_window = ImageWindow(tk.Toplevel(master), model, next(iter(model.data['images'])), width=300, height=300, image_scale=10)
         self.image_window.pack()
 
         self.master = master
@@ -291,7 +343,7 @@ class MainWindow:
             new_window = LayerActivationWindow(self.master, self.model, identifier)
             instances = self.model.data['activations'][identifier]
 
-            new_window.geometry(f'{min(compute_needed_width_for_neurons(instances), 1250)}x450+300+300')
+            new_window.geometry(f'{min(compute_needed_width_for_neurons(instances)+20, 1250)}x400+300+300')
             new_window.title(f'{identifier} activations')
             self.activation_windows[identifier] = new_window
 
