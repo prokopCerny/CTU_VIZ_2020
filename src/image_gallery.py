@@ -35,7 +35,7 @@ class ImageSelectorGallery(tk.Frame):
             self.scroll_canvas.destroy()
         if self.h_scrollbar is not None:
             self.h_scrollbar.destroy()
-        self.scroll_canvas = tk.Canvas(self.bottom_frame)
+        self.scroll_canvas = tk.Canvas(self.bottom_frame, height=90)
         self.h_scrollbar = tk.Scrollbar(self.bottom_frame, command=self.scroll_canvas.xview, orient='horizontal')
         self.h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
         self.scroll_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
@@ -49,10 +49,18 @@ class ImageSelectorGallery(tk.Frame):
                       for idx, instance
                       in enumerate(self.model.data['digit_to_instances'][str(digit)])
                       if idx < 50]
+
         for imag in self.imags:
-            imag.set_binding('<Button-1>', setStringVarEventHandlerClosure(self.instance_label_var, imag.instance))
+            imag.set_binding('<Button-1>', self.single_click_image_closure(imag.instance))
             imag.set_binding('<Double-Button-1>', self.select_image_closure(imag.instance))
             imag.pack(side=tk.LEFT)
 
+    def single_click_image_closure(self, instance):
+        setStringHandler = setStringVarEventHandlerClosure(self.instance_label_var, instance)
+        def single_click_handler(event):
+            setStringHandler(event)
+            self.model.select(instance)
+        return single_click_handler
+
     def select_image_closure(self, instance):
-        return lambda event: self.model.select(instance)
+        return lambda event: self.model.add(instance)

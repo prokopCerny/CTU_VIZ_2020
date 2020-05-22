@@ -53,3 +53,7 @@ def compute_needed_width_for_neurons(layer_data):
     first_instance_key = next(iter(layer_data))
     neuron_count = len(layer_data[first_instance_key])
     return 6+5+80+neuron_count*23
+
+
+def get_average_digit_instance_name(digit: int):
+    return f'Average {digit}'
