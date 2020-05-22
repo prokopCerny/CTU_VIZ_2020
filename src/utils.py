@@ -30,9 +30,9 @@ def RGBtoHex(vals, rgbtype=1):
     return '#' + ''.join([f'{int(round(x)):02X}' for x in vals])
 
 
-def setStringVarEventHandlerClosure(stringVariable: tk.StringVar, text:str):
+def setStringVarEventHandlerClosure(stringVariable: tk.StringVar, text: str):
     def setStringVarEventHandler(event):
-        print(f'Clicked at {event.x}, {event.y}')
+        # print(f'Clicked at {event.x}, {event.y}')
         stringVariable.set(text)
         #print(event.widget.itemconfig(event.widget.find_withtag('current'), fill='green'))
     return setStringVarEventHandler
@@ -70,6 +70,7 @@ class Gradient(tk.Canvas):
     def draw_gradient(self, event):
         self.delete("grad")
         w, h = self.winfo_width(), self.winfo_height()
-        for i in range(w):
-            color = self.cmap((i*w)/(w*(w-1)))
-            self.create_line(i, 0, i, h, tags=("grad",), fill=RGBtoHex(color))
+        if w > 1:
+            for i in range(w):
+                color = self.cmap((i*w)/(w*(w-1)))
+                self.create_line(i, 0, i, h, tags=("grad",), fill=RGBtoHex(color))
