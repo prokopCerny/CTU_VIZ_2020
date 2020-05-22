@@ -29,7 +29,7 @@ class NeuronActivationsPanel(tk.Frame):
             self.canvas.tag_bind(circle,
                                  '<ButtonPress-1>',
                                  setStringVarEventHandlerClosure(stringVariable,
-                                                                 f'{instance} - Neuron {num + 1}: {activation}'))
+                                                                 f'{instance} - Neuron {num + 1}: {activation:.3f}'))
         self.remove_button.pack(side=tk.LEFT, expand=False)
         self.label.pack(side=tk.LEFT, fill=tk.X, expand=False)
         self.canvas.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True)

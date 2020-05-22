@@ -1,9 +1,10 @@
 import tkinter as tk
+from tkinter import ttk
 
 import numpy as np
 
 from datamodel import DataModel, ModelEvent, ModelEventType
-from utils import compute_needed_width_for_neurons
+from utils import compute_needed_width_for_neurons, Gradient
 from neuron_activations_panel import NeuronActivationsPanel
 
 
@@ -21,8 +22,24 @@ class LayerActivationsWindow(tk.Toplevel):
         self.topTextLabel = tk.Label(self.frame_for_top_label_alignment, anchor='w', textvariable=self.topText)
         self.topText.set("Click on a neuron!")
 
+        self.gradient_frame = tk.Frame(self.frame_for_top_label_alignment)
+        self.gradient_frame.grid_columnconfigure(2, weight=1)
+        self.minVar = tk.StringVar()
+        self.maxVar = tk.StringVar()
+        self.minVar.set("Min")
+        self.maxVar.set("Max")
+        self.minLabel = tk.Label(self.gradient_frame, anchor='w', textvariable=self.minVar)
+        self.maxLabel = tk.Label(self.gradient_frame, anchor='e', textvariable=self.maxVar)
+        self.gradient = Gradient(self.gradient_frame, height=20)
+        self.sep = ttk.Separator(self.gradient_frame, orient=tk.VERTICAL)
+        self.sep.grid(row=0, column=0, sticky='ns')
+        self.minLabel.grid(row=0, column=1, sticky='w')
+        self.gradient.grid(row=0, column=2, sticky='we')
+        self.maxLabel.grid(row=0, column=3, sticky='e')
+
         self.frame_for_top_label_alignment.pack(side=tk.TOP, fill=tk.X, expand=False)
         self.topTextLabel.pack(side=tk.LEFT)
+        self.gradient_frame.pack(side=tk.RIGHT, fill=tk.X)
 
         self.canvas = tk.Canvas(self)
         self.v_scrollbar = tk.Scrollbar(self, command=self.canvas.yview)
@@ -57,6 +74,8 @@ class LayerActivationsWindow(tk.Toplevel):
             self.mins[instance] = np.min(self.selected_data[instance])
             cur_max = max(self.maxes.values())
             cur_min = min(self.mins.values())
+            self.minVar.set(f'{cur_min:.3f}')
+            self.maxVar.set(f'{cur_max:.3f}')
             new_thing = NeuronActivationsPanel(self.frame, self.model, instance, self.topText, self.selected_data[instance], cur_min, cur_max)
             self.neuron_activations[instance] = new_thing
             new_thing.pack(fill=tk.X, expand=True)
@@ -73,8 +92,13 @@ class LayerActivationsWindow(tk.Toplevel):
             if self.maxes:
                 cur_max = max(self.maxes.values())
                 cur_min = min(self.mins.values())
+                self.minVar.set(f'{cur_min:.3f}')
+                self.maxVar.set(f'{cur_max:.3f}')
                 for thing in self.neuron_activations.values():
                     thing.update_max_min(cur_max, cur_min)
+            else:
+                self.minVar.set(f'Min')
+                self.maxVar.set(f'Max')
 
     def notify(self, event):
         if isinstance(event, ModelEvent):

@@ -1,5 +1,7 @@
 import tkinter as tk
 
+from colormaps import viridis
+
 
 def RGBtoHex(vals, rgbtype=1):
     """Converts RGB values in a variety of formats to Hex values.
@@ -57,3 +59,17 @@ def compute_needed_width_for_neurons(layer_data):
 
 def get_average_digit_instance_name(digit: int):
     return f'Average {digit}'
+
+
+class Gradient(tk.Canvas):
+    def __init__(self, master, colormap=viridis, **kw):
+        super().__init__(master, **kw)
+        self.cmap = colormap
+        self.bind('<Configure>', self.draw_gradient)
+
+    def draw_gradient(self, event):
+        self.delete("grad")
+        w, h = self.winfo_width(), self.winfo_height()
+        for i in range(w):
+            color = self.cmap((i*w)/(w*(w-1)))
+            self.create_line(i, 0, i, h, tags=("grad",), fill=RGBtoHex(color))
