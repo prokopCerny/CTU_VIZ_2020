@@ -81,7 +81,7 @@ class NeuronActivationCircles(tk.Frame):
     def __init__(self, master, model, instance, stringVariable, neuron_activations, min_act, max_act, colormap=viridis):
         super().__init__(master=master, height=30)
         self.cmap = colormap
-        self.label = tk.Label(self, text=instance, anchor='w', width=6)
+        self.label = tk.Label(self, text=instance, anchor='w', width=8)
         self.model = model
         self.instance = instance
         self.remove_button = tk.Button(self, text='X', command=lambda : self.model.remove(self.instance))
@@ -126,7 +126,7 @@ def find_smallest_missing(lst):
 def compute_needed_width_for_neurons(layer_data):
     first_instance_key = next(iter(layer_data))
     neuron_count = len(layer_data[first_instance_key])
-    return 6+5+67+neuron_count*23
+    return 6+5+80+neuron_count*23
 
 
 class LayerActivationWindow(tk.Toplevel):
@@ -217,22 +217,28 @@ class ImageWindow(tk.Frame):
         super().__init__(master=master)
         self.w = width
         self.h = height
+        self.instance = instance
         self.scale = image_scale
         self.model = model
-        self.canvas = None
+        self.canvas = self.canvas_image = None
         self.update_canvas(instance)
 
     def update_canvas(self, instance):
         if self.canvas is not None:
             self.canvas.destroy()
+        self.instance = instance
         image_data = self.model.data['images'][instance]
         im_h, im_w = image_data.shape
         imag = Image.fromarray(np.round(image_data*255)).resize(size=(im_h*self.scale, im_w*self.scale), resample=Image.NEAREST)
         img = ImageTk.PhotoImage(image=imag)
         self.canvas = tk.Canvas(self,width=self.w,height=self.h) #tk.Canvas(master, width=300, height=300)
         self.canvas.pack()
-        self.canvas.pic=img
-        self.canvas.create_image(0,0, anchor="nw", image=img)
+        self.canvas.pic = img
+        self.canvas_image = self.canvas.create_image(0,0, anchor="nw", image=img)
+
+    def set_binding(self, binding: str, callback):
+        if self.canvas:
+            self.canvas.tag_bind(self.canvas_image, binding, callback)
 
 
 class ImageSelector(tk.Frame):
@@ -241,14 +247,18 @@ class ImageSelector(tk.Frame):
         self.model = model
         self.top_frame = tk.Frame(self)
         self.top_frame.pack(side=tk.TOP, fill=tk.X, expand=False)
+
+        self.instance_label_var = tk.StringVar()
+        self.instance_label_var.set("Click on an image to see details, doubleclick to select")
+        self.instance_label = tk.Label(self.top_frame, textvariable=self.instance_label_var)
+        self.instance_label.pack(side=tk.RIGHT)
+
         self.digit_buttons = [tk.Button(self.top_frame,
                                         text=f'{digit}',
                                         command=self.button_callback_closure(digit))
                               for digit in range(10)]
         for button in self.digit_buttons:
             button.pack(side=tk.LEFT)
-        self.lbl = tk.Label(self.top_frame, text="TSTS")
-        self.lbl.pack(side=tk.RIGHT)
         self.bottom_frame = tk.Frame(self)
         self.bottom_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
         self.scroll_canvas = self.h_scrollbar = None
@@ -277,13 +287,20 @@ class ImageSelector(tk.Frame):
                       in enumerate(self.model.data['digit_to_instances'][str(digit)])
                       if idx < 50]
         for imag in self.imags:
+            imag.set_binding('<Button-1>', setStringVarEventHandlerClosure(self.instance_label_var, imag.instance))
+            imag.set_binding('<Double-Button-1>', self.select_image_closure(imag.instance))
             imag.pack(side=tk.LEFT)
+
+    def select_image_closure(self, instance):
+        return lambda event: self.model.select(instance)
 
 
 class MainWindow:
     def __init__(self, master, model: DataModel):
+        # TODO: integrate selector_window into main window as a frame
         self.selector_window = ImageSelector(tk.Toplevel(master), model)
         self.selector_window.pack(fill=tk.BOTH, expand=True)
+        # TODO: decide if to integrate image window into main frame
         self.image_window = ImageWindow(tk.Toplevel(master), model, next(iter(model.data['images'])), width=300, height=300, image_scale=10)
         self.image_window.pack()
 
