@@ -42,7 +42,6 @@ class ImageSelectorGallery(tk.Frame):
                 real, predicted = results['real'], results['pred']
                 self.instance_label_var.set(f'{instance}: Real label: {real}, predicted: {predicted}')
 
-
     def button_callback_closure(self, digit:int):
         return lambda: self.show_numbers(digit)
 
@@ -114,13 +113,8 @@ class ImageSelectorGallery(tk.Frame):
             imag.set_binding('<Double-Button-1>', self.select_image_closure(imag.instance))
             imag.pack(side=tk.LEFT)
 
-
     def single_click_image_closure(self, instance):
-        # setStringHandler = setStringVarEventHandlerClosure(self.instance_label_var, instance)
-        def single_click_handler(event):
-            # setStringHandler(event)
-            self.model.select(instance)
-        return single_click_handler
+        return lambda event: self.model.select(instance)
 
     def select_image_closure(self, instance):
         return lambda event: self.model.add(instance)
