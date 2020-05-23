@@ -9,6 +9,7 @@ from datamodel import DataModel, ModelEvent, ModelEventType
 from image_frame import ImageFrame
 from image_gallery import ImageSelectorGallery
 from layer_activations_window import LayerActivationsWindow
+from layer_projections_window import LayerProjectionsWindow
 from utils import compute_needed_width_for_neurons, get_average_digit_instance_name
 
 
@@ -24,9 +25,13 @@ class MenuPanel(tk.Frame):
         self.removeButton = tk.Button(self, text="Delete max digit activations", width=25,
                                       command=self.delete_max_digit_activations)
 
-        self.sep = ttk.Separator(self, orient=tk.HORIZONTAL)
+        self.sep1 = ttk.Separator(self, orient=tk.HORIZONTAL)
 
-        self.activation_windows = {}
+        self.projection_button = tk.Button(self, text="Layer projections", width=25, command=self.open_projection_window)
+
+        self.sep2 = ttk.Separator(self, orient=tk.HORIZONTAL)
+
+        self.sub_windows = {}
         self.layer_buttons = [tk.Button(self,
                                         text=f'{layer} activations',
                                         width=25,
@@ -38,21 +43,37 @@ class MenuPanel(tk.Frame):
         self.entry.pack()
         self.addButton.pack()
         self.removeButton.pack()
-        self.sep.pack(fill=tk.X, pady=5)
+        self.sep1.pack(fill=tk.X, pady=5)
+        self.projection_button.pack()
+        self.sep2.pack(fill=tk.X, pady=5)
         for button in self.layer_buttons:
             button.pack()
 
+    def open_projection_window(self):
+        identifier = "Projection window"
+        try:
+            if self.sub_windows[identifier].state() == "normal":
+                self.sub_windows[identifier].focus()
+        except (KeyError, tk.TclError):
+            new_window = LayerProjectionsWindow(self.master,
+                                                self.model,
+                                                scatter_height=600,
+                                                scatter_width=600)
+            new_window.title(f'tSNE layer projections')
+            new_window.resizable(False, False)
+            self.sub_windows[identifier] = new_window
+
     def activation_window_open(self, identifier: str):
         try:
-            if self.activation_windows[identifier].state() == "normal":
-                self.activation_windows[identifier].focus()
+            if self.sub_windows[identifier].state() == "normal":
+                self.sub_windows[identifier].focus()
         except (KeyError, tk.TclError):
             new_window = LayerActivationsWindow(self.master, self.model, identifier)
             instances = self.model.data['activations'][identifier]
 
             new_window.geometry(f'{min(compute_needed_width_for_neurons(instances) + 20, 1250)}x400+300+300')
             new_window.title(f'{identifier} activations')
-            self.activation_windows[identifier] = new_window
+            self.sub_windows[identifier] = new_window
 
     def open_activation_window_closure(self, layer:str):
         return lambda: self.activation_window_open(layer)
@@ -75,71 +96,11 @@ class MenuPanel(tk.Frame):
             self.model.remove(max_digit)
 
 
-category10 = ["#1f77b4",
-              "#ff7f0e",
-              "#2ca02c",
-              "#d62728",
-              "#9467bd",
-              "#8c564b",
-              "#e377c2",
-              "#7f7f7f",
-              "#bcbd22",
-              "#17becf"]
-
-
-class ScatterCanvas(tk.Canvas):
-    def __init__(self, master, model, layer, width, height, circle_radius=3, padding=4, **kw):
-        super().__init__(master, width=width, height=height, **kw)
-        self.model = model
-        self.layer = layer
-
-        w, h = width, height
-        self.configure(scrollregion=(-w/2, -h/2, w/2, h/2))  # make origin the middle
-
-        names, coords = zip(*self.model.data['projections'][self.layer].items())
-        names = np.array(names)
-        coords = np.stack(coords, axis=0)
-
-        center_of_mass = np.average(coords, axis=0)
-        coords -= center_of_mass  # center the data
-
-        max_val = np.max(np.abs(coords))
-
-        scale = (min(w/2, h/2)-(padding*2))/max_val
-        coords = np.floor(coords*scale)
-
-        # need to flip the y axis, because in tkinter the y-axis increases downwards
-        max_y = np.max(coords[:, 1], axis=0)
-        min_y = np.min(coords[:, 1], axis=0)
-        coords[:, 1] = (max_y+min_y)-(coords[:, 1])
-        coords += padding
-
-        for name, (x, y) in zip(names, coords):
-            x1, y1, x2, y2 = x-circle_radius, y-circle_radius, x+circle_radius, y+circle_radius
-            real = self.model.data['prediction_results'][name]['real']
-            cur_point = self.create_oval(x1, y1, x2, y2, fill=category10[real])
-            self.tag_bind(cur_point, '<Button-1>', self.select_closure(name))
-            self.tag_bind(cur_point, '<Double-Button-1>', self.add_closure(name))
-
-    def select_closure(self, instance):
-        return lambda event: self.model.select(instance)
-
-    def add_closure(self, instance):
-        return lambda event: self.model.add(instance)
-
-
 class MainWindow:
     def __init__(self, master, model: DataModel):
-        # TODO: create a dedicated window for scatter_canvas
-        self.scatter_canvas = ScatterCanvas(tk.Toplevel(master),
-                                            model,
-                                            next(iter(model.data['projections'])),
-                                            width=600,
-                                            height=600)
-        self.scatter_canvas.pack(expand=False)
-
         self.master = master
         self.model = model
+        self.master.title("Neural Network Visualization")
 
         self.master.grid_rowconfigure(1, weight=1)
         self.master.grid_columnconfigure(1, weight=1)
