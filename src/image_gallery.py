@@ -97,12 +97,12 @@ class ImageSelectorGallery(tk.Frame):
             real, predicted = results['real'], results['pred']
             if real == predicted:
                 correct_frame = self.top_canvas_frame
-                correct_count += 1
+                # correct_count += 1
                 if correct_count > 50:
                     continue
             else:
                 correct_frame = self.bottom_canvas_frame
-                incorrect_count += 1
+                # incorrect_count += 1
                 if incorrect_count > 50:
                     continue
             cur_image = ImageFrame(correct_frame, self.model, instance, width=84, height=84, image_scale=3)
