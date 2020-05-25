@@ -59,6 +59,7 @@ class LayerActivationsWindow(tk.Toplevel):
         self.neuron_activations = {}
         self.maxes = {}  # list of max neuron activation per each digit, used for value normalization for coloring
         self.mins = {}
+        self.double_click_label = None
 
         self.recreate_from_model()
         self.model.observers.append(self)
@@ -69,6 +70,8 @@ class LayerActivationsWindow(tk.Toplevel):
         self.destroy()
 
     def _add_instance(self, instance):
+        if self.double_click_label is not None:
+            self.double_click_label.destroy()
         if instance not in self.neuron_activations:
             self.maxes[instance] = np.max(self.selected_data[instance])
             self.mins[instance] = np.min(self.selected_data[instance])
@@ -99,6 +102,16 @@ class LayerActivationsWindow(tk.Toplevel):
             else:
                 self.minVar.set(f'Min')
                 self.maxVar.set(f'Max')
+        self._check_empty()
+
+    def _check_empty(self):
+        if not self.neuron_activations:
+            if self.double_click_label is not None:
+                self.double_click_label.destroy()
+            self.double_click_label = tk.Label(self.frame,
+                                               anchor='w',
+                                               text="Double click on an instance in gallery or layer projections!")
+            self.double_click_label.pack(fill=tk.BOTH, expand=True)
 
     def notify(self, event):
         if isinstance(event, ModelEvent):
@@ -113,3 +126,4 @@ class LayerActivationsWindow(tk.Toplevel):
             self._remove_instance(instance)
         for digit in self.model.selected_instances:
             self._add_instance(digit)
+        self._check_empty()
