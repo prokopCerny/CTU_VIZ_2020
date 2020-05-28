@@ -59,7 +59,7 @@ class MenuPanel(tk.Frame):
                                                 self.model,
                                                 scatter_height=600,
                                                 scatter_width=600)
-            new_window.title(f'tSNE layer projections')
+            new_window.title(f'PCA layer projections')
             new_window.resizable(False, False)
             self.sub_windows[identifier] = new_window
 
