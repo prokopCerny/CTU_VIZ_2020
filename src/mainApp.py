@@ -20,9 +20,9 @@ class MenuPanel(tk.Frame):
         self.label = tk.Label(self, text="Digit:", anchor='w')
         self.entry = tk.Entry(self)
         self.entry.insert(tk.END, "0")
-        self.addButton = tk.Button(self, text="Add digit activations", width=25,
+        self.addButton = tk.Button(self, text="Add average digit activations", width=25,
                                    command=self.read_add_digit)
-        self.removeButton = tk.Button(self, text="Delete max digit activations", width=25,
+        self.removeButton = tk.Button(self, text="Delete activations", width=25,
                                       command=self.delete_max_digit_activations)
 
         self.sep1 = ttk.Separator(self, orient=tk.HORIZONTAL)
@@ -88,7 +88,9 @@ class MenuPanel(tk.Frame):
                 self.model.select(instance_name)
                 # self.update_canvas(f'Digit {digit}')
                 self.entry.delete(0, tk.END)
-                self.entry.insert(0, f'{digit+1}')
+                if digit == 9:
+                    self.entry.insert(0, f'{0}')
+                else : self.entry.insert(0, f'{digit+1}')
 
     def delete_max_digit_activations(self):
         if self.model.selected_instances:
